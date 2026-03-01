@@ -2,47 +2,55 @@ import Icon from "@/components/ui/icon";
 
 const generateLuaScript = (sensitivity: number, speed: number) => `-- =============================================
 --   ColorSnap для AnkuLua
---   Следит за цветом в точке и кликает
+--   Автоклик при малейшем изменении цвета
 -- =============================================
 
--- ===== НАСТРОЙТЕ ЭТИ ПАРАМЕТРЫ =====
+-- ===== НАСТРОЙТЕ ТОЛЬКО ЭТИ 4 ЧИСЛА =====
 
-local WATCH_X = 500       -- X точки наблюдения за цветом
-local WATCH_Y = 800       -- Y точки наблюдения за цветом
+local WATCH_X = 500       -- X точки наблюдения (куда смотреть)
+local WATCH_Y = 800       -- Y точки наблюдения (куда смотреть)
 
-local CLICK_X = 500       -- X куда кликать при изменении
-local CLICK_Y = 1200      -- Y куда кликать при изменении
+local CLICK_X = 500       -- X куда кликать
+local CLICK_Y = 1200      -- Y куда кликать
 
-local TOLERANCE = ${sensitivity}      -- Чувствительность (меньше = точнее)
-local INTERVAL  = ${(speed / 1000).toFixed(2)}     -- Частота проверки в секундах
-
--- =======================================
+-- ==========================================
+-- Параметры из приложения (не менять)
+local TOLERANCE = ${sensitivity}
+local INTERVAL  = ${(speed / 1000).toFixed(3)}
+-- ==========================================
 
 local function getR(c) return bit32.band(bit32.rshift(c, 16), 0xFF) end
 local function getG(c) return bit32.band(bit32.rshift(c, 8),  0xFF) end
 local function getB(c) return bit32.band(c, 0xFF) end
 
-local function colorChanged(c1, c2)
-    local dr = math.abs(getR(c1) - getR(c2))
-    local dg = math.abs(getG(c1) - getG(c2))
-    local db = math.abs(getB(c1) - getB(c2))
-    return (dr + dg + db) > TOLERANCE
+-- Взвешенное расстояние цвета (точнее чем простая сумма)
+local function colorDist(c1, c2)
+    local dr = getR(c1) - getR(c2)
+    local dg = getG(c1) - getG(c2)
+    local db = getB(c1) - getB(c2)
+    return math.sqrt(dr*dr*0.299 + dg*dg*0.587 + db*db*0.114)
 end
 
-toast("ColorSnap запущен! Слежу за точкой " .. WATCH_X .. "," .. WATCH_Y)
+toast("ColorSnap запущен!")
 
 local lastColor = getColor(WATCH_X, WATCH_Y)
 local count = 0
+local cooldown = false
 
 while true do
     local currentColor = getColor(WATCH_X, WATCH_Y)
+    local dist = colorDist(lastColor, currentColor)
 
-    if colorChanged(lastColor, currentColor) then
+    if dist > TOLERANCE and not cooldown then
         tap(CLICK_X, CLICK_Y)
         count = count + 1
-        toast("Срабатывание #" .. count)
         lastColor = currentColor
-        sleep(0.1)
+        cooldown = true
+
+        -- Сброс кулдауна через 100мс чтобы не спамить
+        setTimeout(function()
+            cooldown = false
+        end, 0.1)
     end
 
     sleep(INTERVAL)
