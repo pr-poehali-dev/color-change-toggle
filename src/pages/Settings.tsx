@@ -1,5 +1,65 @@
 import Icon from "@/components/ui/icon";
 
+const generateLuaScript = (sensitivity: number, speed: number) => `-- =============================================
+--   ColorSnap для AnkuLua
+--   Следит за цветом в точке и кликает
+-- =============================================
+
+-- ===== НАСТРОЙТЕ ЭТИ ПАРАМЕТРЫ =====
+
+local WATCH_X = 500       -- X точки наблюдения за цветом
+local WATCH_Y = 800       -- Y точки наблюдения за цветом
+
+local CLICK_X = 500       -- X куда кликать при изменении
+local CLICK_Y = 1200      -- Y куда кликать при изменении
+
+local TOLERANCE = ${sensitivity}      -- Чувствительность (меньше = точнее)
+local INTERVAL  = ${(speed / 1000).toFixed(2)}     -- Частота проверки в секундах
+
+-- =======================================
+
+local function getR(c) return bit32.band(bit32.rshift(c, 16), 0xFF) end
+local function getG(c) return bit32.band(bit32.rshift(c, 8),  0xFF) end
+local function getB(c) return bit32.band(c, 0xFF) end
+
+local function colorChanged(c1, c2)
+    local dr = math.abs(getR(c1) - getR(c2))
+    local dg = math.abs(getG(c1) - getG(c2))
+    local db = math.abs(getB(c1) - getB(c2))
+    return (dr + dg + db) > TOLERANCE
+end
+
+toast("ColorSnap запущен! Слежу за точкой " .. WATCH_X .. "," .. WATCH_Y)
+
+local lastColor = getColor(WATCH_X, WATCH_Y)
+local count = 0
+
+while true do
+    local currentColor = getColor(WATCH_X, WATCH_Y)
+
+    if colorChanged(lastColor, currentColor) then
+        tap(CLICK_X, CLICK_Y)
+        count = count + 1
+        toast("Срабатывание #" .. count)
+        lastColor = currentColor
+        sleep(0.1)
+    end
+
+    sleep(INTERVAL)
+end
+`;
+
+const downloadLua = (sensitivity: number, speed: number) => {
+  const content = generateLuaScript(sensitivity, speed);
+  const blob = new Blob([content], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "colorsnap.lua";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 interface Props {
   sensitivity: number;
   speed: number;
@@ -199,6 +259,20 @@ export default function Settings({ sensitivity, speed, onSensitivity, onSpeed, o
             </p>
           </div>
         </div>
+
+        {/* Download lua */}
+        <button
+          onClick={() => downloadLua(sensitivity, speed)}
+          className="w-full py-4 rounded-2xl font-bold text-base transition-all flex items-center justify-center gap-3"
+          style={{
+            background: "hsl(var(--card))",
+            color: "hsl(var(--neon))",
+            border: "1.5px solid hsl(var(--neon) / 0.4)",
+          }}
+        >
+          <Icon name="Download" size={18} style={{ color: "hsl(var(--neon))" }} />
+          Скачать скрипт для AnkuLua
+        </button>
 
         {/* Back button */}
         <button
